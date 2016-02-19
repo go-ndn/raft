@@ -57,8 +57,8 @@ type ndnRedirectResponse struct {
 
 type ndnTransport struct {
 	Name string
+	*mux.Publisher
 	ndn.Face
-	Store ndn.Cache
 
 	append   chan *AppendRequest
 	vote     chan *VoteRequest
@@ -74,11 +74,12 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 	recv := make(chan *ndn.Interest)
 	face := ndn.NewFace(conn, recv)
+	cache := ndn.NewCache(65536)
 
 	tr := &ndnTransport{
-		Name:  name,
-		Face:  face,
-		Store: ndn.NewCache(65536),
+		Name:      name,
+		Face:      face,
+		Publisher: mux.NewPublisher(cache),
 
 		append:   make(chan *AppendRequest),
 		vote:     make(chan *VoteRequest),
@@ -87,8 +88,9 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 	fetcher := mux.NewFetcher()
 	m := mux.New()
-	m.Use(mux.RawCacher(tr.Store, false))
+	m.Use(mux.RawCacher(cache, false))
 
+	// served from cache
 	m.HandleFunc(name+"/log", func(w ndn.Sender, i *ndn.Interest) {})
 	m.HandleFunc(name+"/append", func(w ndn.Sender, i *ndn.Interest) {})
 	m.HandleFunc(name+"/vote", func(w ndn.Sender, i *ndn.Interest) {})
@@ -107,6 +109,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			return
 		}
 
+		// fetch leader log entries
 		var log []LogEntry
 		for i := req.PrevLogIndex + 1; i <= req.PrevLogIndex+req.LogCount; i++ {
 			var entry ndnLogEntry
@@ -246,8 +249,8 @@ func (t *ndnTransport) AcceptRedirect() <-chan *RedirectRequest {
 }
 
 func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendResponse {
+	// publish leader log entry
 	for i, entry := range req.Log {
-		entryName := fmt.Sprintf("/%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1)
 		b, err := tlv.Marshal(&ndnLogEntry{
 			Term:  entry.Term,
 			Value: entry.Value,
@@ -255,8 +258,8 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 		if err != nil {
 			return &AppendResponse{}
 		}
-		t.Store.Add(&ndn.Data{
-			Name:    ndn.NewName(entryName),
+		t.Publish(&ndn.Data{
+			Name:    ndn.NewName(fmt.Sprintf("/%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1)),
 			Content: b,
 		})
 	}
@@ -274,7 +277,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 	}
 
 	reqName := fmt.Sprintf("%s/append/%d", t.Name, now())
-	t.Store.Add(&ndn.Data{
+	t.Publish(&ndn.Data{
 		Name:    ndn.NewName(reqName),
 		Content: b,
 	})
@@ -306,7 +309,7 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 	}
 
 	reqName := fmt.Sprintf("%s/vote/%d", t.Name, now())
-	t.Store.Add(&ndn.Data{
+	t.Publish(&ndn.Data{
 		Name:    ndn.NewName(reqName),
 		Content: b,
 	})
@@ -338,7 +341,7 @@ func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *Redir
 	}
 
 	reqName := fmt.Sprintf("%s/redirect/%d", t.Name, now())
-	t.Store.Add(&ndn.Data{
+	t.Publish(&ndn.Data{
 		Name:    ndn.NewName(reqName),
 		Content: b,
 	})
