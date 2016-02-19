@@ -279,7 +279,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/append", peer), reqName, 4*time.Second)
+	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/append", peer), reqName, HeartbeatTimeout)
 	if !ok {
 		return &AppendResponse{}
 	}
@@ -311,7 +311,7 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/vote", peer), reqName, 4*time.Second)
+	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/vote", peer), reqName, ElectionTimeout)
 	if !ok {
 		return &VoteResponse{}
 	}
@@ -343,7 +343,7 @@ func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *Redir
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/redirect", peer), reqName, 4*time.Second)
+	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/redirect", peer), reqName, HeartbeatTimeout)
 	if !ok {
 		return &RedirectResponse{}
 	}
