@@ -58,6 +58,7 @@ type ndnRedirectResponse struct {
 type ndnTransport struct {
 	Name string
 	*mux.Publisher
+	*mux.Fetcher
 	ndn.Face
 
 	append   chan *AppendRequest
@@ -72,21 +73,28 @@ func now() uint64 {
 func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 	name = "/" + name
 
-	recv := make(chan *ndn.Interest)
-	face := ndn.NewFace(conn, recv)
 	cache := ndn.NewCache(65536)
 
-	tr := &ndnTransport{
+	recv := make(chan *ndn.Interest)
+	t := &ndnTransport{
 		Name:      name,
-		Face:      face,
+		Face:      ndn.NewFace(conn, recv),
 		Publisher: mux.NewPublisher(cache),
+		Fetcher:   mux.NewFetcher(),
 
 		append:   make(chan *AppendRequest),
 		vote:     make(chan *VoteRequest),
 		redirect: make(chan *RedirectRequest),
 	}
 
-	fetcher := mux.NewFetcher()
+	// verify checksum
+	t.Fetcher.Use(mux.ChecksumVerifier)
+	// assemble chunks
+	t.Fetcher.Use(mux.Assembler)
+
+	// segment
+	t.Publisher.Use(mux.Segmentor(4096))
+
 	m := mux.New()
 	m.Use(mux.RawCacher(cache, false))
 
@@ -99,11 +107,10 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 	m.Handle(mux.Listener(name+"/listen/append", func(locator string, w ndn.Sender, i *ndn.Interest) {
 		var req ndnAppendRequest
 		err := tlv.Unmarshal(
-			fetcher.Fetch(w, &ndn.Interest{
+			t.Fetch(w, &ndn.Interest{
 				Name: ndn.NewName(locator),
 			}),
-			&req,
-			101,
+			&req, 101,
 		)
 		if err != nil {
 			return
@@ -114,11 +121,10 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 		for i := req.PrevLogIndex + 1; i <= req.PrevLogIndex+req.LogCount; i++ {
 			var entry ndnLogEntry
 			err := tlv.Unmarshal(
-				fetcher.Fetch(face, &ndn.Interest{
+				t.Fetch(w, &ndn.Interest{
 					Name: ndn.NewName(fmt.Sprintf("/%s/log/%d", req.Name, i)),
 				}),
-				&entry,
-				101,
+				&entry, 101,
 			)
 			if err != nil {
 				return
@@ -129,7 +135,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			})
 		}
 
-		tr.append <- &AppendRequest{
+		t.append <- &AppendRequest{
 			Name: req.Name,
 
 			Term:         req.Term,
@@ -157,17 +163,16 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 	m.Handle(mux.Listener(name+"/listen/vote", func(locator string, w ndn.Sender, i *ndn.Interest) {
 		var req ndnVoteRequest
 		err := tlv.Unmarshal(
-			fetcher.Fetch(w, &ndn.Interest{
+			t.Fetch(w, &ndn.Interest{
 				Name: ndn.NewName(locator),
 			}),
-			&req,
-			101,
+			&req, 101,
 		)
 		if err != nil {
 			return
 		}
 
-		tr.vote <- &VoteRequest{
+		t.vote <- &VoteRequest{
 			Name: req.Name,
 
 			Term:         req.Term,
@@ -193,17 +198,16 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 	m.Handle(mux.Listener(name+"/listen/redirect", func(locator string, w ndn.Sender, i *ndn.Interest) {
 		var req ndnRedirectRequest
 		err := tlv.Unmarshal(
-			fetcher.Fetch(w, &ndn.Interest{
+			t.Fetch(w, &ndn.Interest{
 				Name: ndn.NewName(locator),
 			}),
-			&req,
-			101,
+			&req, 101,
 		)
 		if err != nil {
 			return
 		}
 
-		tr.redirect <- &RedirectRequest{
+		t.redirect <- &RedirectRequest{
 			Name: req.Name,
 
 			Term:  req.Term,
@@ -225,15 +229,15 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 		}
 	}))
 
-	m.Register(face, key)
+	m.Register(t, key)
 
 	go func() {
 		for i := range recv {
-			m.ServeNDN(face, i)
+			m.ServeNDN(t, i)
 		}
 	}()
 
-	return tr
+	return t
 }
 
 func (t *ndnTransport) AcceptAppend() <-chan *AppendRequest {
@@ -282,12 +286,10 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/append", peer), reqName, HeartbeatTimeout)
-	if !ok {
-		return &AppendResponse{}
-	}
 	var resp ndnAppendResponse
-	err = tlv.Unmarshal(d.Content, &resp, 101)
+	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
+		Name: mux.Notify(fmt.Sprintf("/%s/listen/append", peer), reqName),
+	}), &resp, 101)
 	if err != nil {
 		return &AppendResponse{}
 	}
@@ -314,12 +316,10 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/vote", peer), reqName, ElectionTimeout)
-	if !ok {
-		return &VoteResponse{}
-	}
 	var resp ndnVoteResponse
-	err = tlv.Unmarshal(d.Content, &resp, 101)
+	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
+		Name: mux.Notify(fmt.Sprintf("/%s/listen/vote", peer), reqName),
+	}), &resp, 101)
 	if err != nil {
 		return &VoteResponse{}
 	}
@@ -346,12 +346,10 @@ func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *Redir
 		Content: b,
 	})
 
-	d, ok := <-mux.Notify(t, fmt.Sprintf("/%s/listen/redirect", peer), reqName, HeartbeatTimeout)
-	if !ok {
-		return &RedirectResponse{}
-	}
 	var resp ndnRedirectResponse
-	err = tlv.Unmarshal(d.Content, &resp, 101)
+	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
+		Name: mux.Notify(fmt.Sprintf("/%s/listen/redirect", peer), reqName),
+	}), &resp, 101)
 	if err != nil {
 		return &RedirectResponse{}
 	}
