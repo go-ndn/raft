@@ -5,7 +5,7 @@ type RedirectRequest struct {
 	Term  uint64
 	Input [][]byte
 
-	Respond func(*RedirectResponse)
+	Response chan<- *RedirectResponse
 }
 
 type RedirectResponse struct {

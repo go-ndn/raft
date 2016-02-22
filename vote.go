@@ -7,7 +7,7 @@ type VoteRequest struct {
 	LastLogTerm  uint64
 	LastLogIndex uint64
 
-	Respond func(*VoteResponse)
+	Response chan<- *VoteResponse
 }
 
 type VoteResponse struct {

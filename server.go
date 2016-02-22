@@ -130,9 +130,9 @@ func (s *Server) Start() {
 				})
 				s.UpdateTermIfNewer(resp.Term)
 			case req := <-s.AcceptAppend():
-				req.Respond(s.AppendEntryRPC(req))
+				req.Response <- s.AppendEntryRPC(req)
 			case req := <-s.AcceptVote():
-				req.Respond(s.VoteRPC(req))
+				req.Response <- s.VoteRPC(req)
 			case <-timeAfter(HeartbeatTimeout):
 				if s.VotedFor == "" {
 					s.State = Candidate
@@ -143,7 +143,7 @@ func (s *Server) Start() {
 			case <-s.Shutdown:
 				return
 			case req := <-s.AcceptRedirect():
-				req.Respond(s.RedirectRPC(req))
+				req.Response <- s.RedirectRPC(req)
 			case b := <-s.Input:
 				s.Log = append(s.Log, LogEntry{
 					Term:  s.Term,
@@ -175,9 +175,9 @@ func (s *Server) Start() {
 			case <-s.Shutdown:
 				return
 			case req := <-s.AcceptAppend():
-				req.Respond(s.AppendEntryRPC(req))
+				req.Response <- s.AppendEntryRPC(req)
 			case req := <-s.AcceptVote():
-				req.Respond(s.VoteRPC(req))
+				req.Response <- s.VoteRPC(req)
 			case <-timeAfter(ElectionTimeout):
 				s.UpdateTermIfNewer(s.Term + 1)
 

@@ -10,7 +10,7 @@ type AppendRequest struct {
 
 	Log []LogEntry
 
-	Respond func(*AppendResponse)
+	Response chan<- *AppendResponse
 }
 
 type AppendResponse struct {

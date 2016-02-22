@@ -135,6 +135,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			})
 		}
 
+		ch := make(chan *AppendResponse)
 		t.append <- &AppendRequest{
 			Name: req.Name,
 
@@ -144,20 +145,21 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			CommitIndex:  req.CommitIndex,
 			Log:          log,
 
-			Respond: func(resp *AppendResponse) {
-				b, err := tlv.Marshal(&ndnAppendResponse{
-					Term:    resp.Term,
-					Success: resp.Success,
-				}, 101)
-				if err != nil {
-					return
-				}
-				w.SendData(&ndn.Data{
-					Name:    i.Name,
-					Content: b,
-				})
-			},
+			Response: ch,
 		}
+
+		resp := <-ch
+		b, err := tlv.Marshal(&ndnAppendResponse{
+			Term:    resp.Term,
+			Success: resp.Success,
+		}, 101)
+		if err != nil {
+			return
+		}
+		w.SendData(&ndn.Data{
+			Name:    i.Name,
+			Content: b,
+		})
 	}))
 
 	m.Handle(mux.Listener(name+"/listen/vote", func(locator string, w ndn.Sender, i *ndn.Interest) {
@@ -172,6 +174,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			return
 		}
 
+		ch := make(chan *VoteResponse)
 		t.vote <- &VoteRequest{
 			Name: req.Name,
 
@@ -179,20 +182,21 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			LastLogTerm:  req.LastLogTerm,
 			LastLogIndex: req.LastLogIndex,
 
-			Respond: func(resp *VoteResponse) {
-				b, err := tlv.Marshal(&ndnVoteResponse{
-					Term:    resp.Term,
-					Success: resp.Success,
-				}, 101)
-				if err != nil {
-					return
-				}
-				w.SendData(&ndn.Data{
-					Name:    i.Name,
-					Content: b,
-				})
-			},
+			Response: ch,
 		}
+
+		resp := <-ch
+		b, err := tlv.Marshal(&ndnVoteResponse{
+			Term:    resp.Term,
+			Success: resp.Success,
+		}, 101)
+		if err != nil {
+			return
+		}
+		w.SendData(&ndn.Data{
+			Name:    i.Name,
+			Content: b,
+		})
 	}))
 
 	m.Handle(mux.Listener(name+"/listen/redirect", func(locator string, w ndn.Sender, i *ndn.Interest) {
@@ -207,26 +211,28 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			return
 		}
 
+		ch := make(chan *RedirectResponse)
 		t.redirect <- &RedirectRequest{
 			Name: req.Name,
 
 			Term:  req.Term,
 			Input: req.Input,
 
-			Respond: func(resp *RedirectResponse) {
-				b, err := tlv.Marshal(&ndnRedirectResponse{
-					Term:    resp.Term,
-					Success: resp.Success,
-				}, 101)
-				if err != nil {
-					return
-				}
-				w.SendData(&ndn.Data{
-					Name:    i.Name,
-					Content: b,
-				})
-			},
+			Response: ch,
 		}
+
+		resp := <-ch
+		b, err := tlv.Marshal(&ndnRedirectResponse{
+			Term:    resp.Term,
+			Success: resp.Success,
+		}, 101)
+		if err != nil {
+			return
+		}
+		w.SendData(&ndn.Data{
+			Name:    i.Name,
+			Content: b,
+		})
 	}))
 
 	m.Register(t, key)

@@ -12,9 +12,7 @@ func (f *appendNetwork) SendRequest(name string, req *AppendRequest, ch chan<- *
 	h, ok := f.nexthop[name]
 	f.RUnlock()
 	if ok {
-		req.Respond = func(resp *AppendResponse) {
-			ch <- resp
-		}
+		req.Response = ch
 		h <- req
 	}
 }
@@ -35,9 +33,7 @@ func (f *voteNetwork) SendRequest(name string, req *VoteRequest, ch chan<- *Vote
 	h, ok := f.nexthop[name]
 	f.RUnlock()
 	if ok {
-		req.Respond = func(resp *VoteResponse) {
-			ch <- resp
-		}
+		req.Response = ch
 		h <- req
 	}
 }
@@ -58,9 +54,7 @@ func (f *redirectNetwork) SendRequest(name string, req *RedirectRequest, ch chan
 	h, ok := f.nexthop[name]
 	f.RUnlock()
 	if ok {
-		req.Respond = func(resp *RedirectResponse) {
-			ch <- resp
-		}
+		req.Response = ch
 		h <- req
 	}
 }
