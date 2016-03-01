@@ -45,13 +45,11 @@ type ndnVoteResponse struct {
 }
 
 type ndnRedirectRequest struct {
-	Name  string   `tlv:"131"`
-	Term  uint64   `tlv:"128"`
 	Input [][]byte `tlv:"139"`
 }
 
 type ndnRedirectResponse struct {
-	Term    uint64 `tlv:"128"`
+	Leader  string `tlv:"140"`
 	Success bool   `tlv:"136"`
 }
 
@@ -213,9 +211,6 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 		ch := make(chan *RedirectResponse)
 		t.redirect <- &RedirectRequest{
-			Name: req.Name,
-
-			Term:  req.Term,
 			Input: req.Input,
 
 			Response: ch,
@@ -223,7 +218,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 		resp := <-ch
 		b, err := tlv.Marshal(&ndnRedirectResponse{
-			Term:    resp.Term,
+			Leader:  resp.Leader,
 			Success: resp.Success,
 		}, 101)
 		if err != nil {
@@ -337,8 +332,6 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 
 func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *RedirectResponse {
 	b, err := tlv.Marshal(&ndnRedirectRequest{
-		Name:  req.Name,
-		Term:  req.Term,
 		Input: req.Input,
 	}, 101)
 
@@ -360,7 +353,7 @@ func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *Redir
 		return &RedirectResponse{}
 	}
 	return &RedirectResponse{
-		Term:    resp.Term,
+		Leader:  resp.Leader,
 		Success: resp.Success,
 	}
 }

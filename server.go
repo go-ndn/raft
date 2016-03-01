@@ -40,7 +40,6 @@ type Server struct {
 	VotedFor string
 	Leader   string
 
-	Input    <-chan []byte
 	Shutdown chan struct{}
 }
 
@@ -49,8 +48,6 @@ type Option struct {
 	Peer []string
 	Store
 	Transport
-
-	Input <-chan []byte
 }
 
 func NewServer(opt *Option) (*Server, error) {
@@ -82,7 +79,6 @@ func NewServer(opt *Option) (*Server, error) {
 		Term:     term,
 		VotedFor: votedFor,
 
-		Input:    opt.Input,
 		Shutdown: make(chan struct{}),
 	}, nil
 }
@@ -106,29 +102,11 @@ func (s *Server) Start() {
 	for {
 		switch s.State {
 		case Follower:
-			var input <-chan []byte
-			if s.Leader != "" {
-				input = s.Input
-			}
 			select {
 			case <-s.Shutdown:
 				return
-			case b := <-input:
-				bs := [][]byte{b}
-			INPUT:
-				for {
-					select {
-					case b = <-input:
-						bs = append(bs, b)
-					default:
-						break INPUT
-					}
-				}
-				resp := s.RequestRedirect(s.Leader, &RedirectRequest{
-					Term:  s.Term,
-					Input: bs,
-				})
-				s.UpdateTermIfNewer(resp.Term)
+			case req := <-s.AcceptRedirect():
+				req.Response <- s.RedirectRPC(req)
 			case req := <-s.AcceptAppend():
 				req.Response <- s.AppendEntryRPC(req)
 			case req := <-s.AcceptVote():
@@ -144,11 +122,6 @@ func (s *Server) Start() {
 				return
 			case req := <-s.AcceptRedirect():
 				req.Response <- s.RedirectRPC(req)
-			case b := <-s.Input:
-				s.Log = append(s.Log, LogEntry{
-					Term:  s.Term,
-					Value: b,
-				})
 			case <-time.After(HeartbeatIntv):
 				count := 1
 				for i, resp := range s.RequestAppendFromPeers() {
