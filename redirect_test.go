@@ -98,7 +98,7 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 		t.Fatalf("leader should accept redirect")
 	}
 
-	time.Sleep(4 * HeartbeatIntv)
+	time.Sleep(3 * HeartbeatIntv)
 
 	leaderCommitted, err := leader.GetLog()
 	if err != nil {

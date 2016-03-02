@@ -182,7 +182,7 @@ func testAppendEntry(t *testing.T, transport func(*Option) Transport, store func
 		go leader.Start()
 		go follower.Start()
 
-		time.Sleep(10 * HeartbeatIntv)
+		time.Sleep(time.Duration(len(leaderLog[3:])+3) * HeartbeatIntv)
 
 		leaderCommitted, err := leader.GetLog()
 		if err != nil {
