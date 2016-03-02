@@ -40,7 +40,7 @@ type Server struct {
 	VotedFor string
 	Leader   string
 
-	Shutdown chan struct{}
+	stop chan struct{}
 }
 
 type Option struct {
@@ -79,7 +79,7 @@ func NewServer(opt *Option) (*Server, error) {
 		Term:     term,
 		VotedFor: votedFor,
 
-		Shutdown: make(chan struct{}),
+		stop: make(chan struct{}),
 	}, nil
 }
 
@@ -95,7 +95,7 @@ func timeAfter(d time.Duration) <-chan time.Time {
 }
 
 func (s *Server) Stop() {
-	s.Shutdown <- struct{}{}
+	s.stop <- struct{}{}
 }
 
 func (s *Server) Start() {
@@ -103,7 +103,7 @@ func (s *Server) Start() {
 		switch s.State {
 		case Follower:
 			select {
-			case <-s.Shutdown:
+			case <-s.stop:
 				return
 			case req := <-s.AcceptRedirect():
 				req.Response <- s.RedirectRPC(req)
@@ -118,7 +118,7 @@ func (s *Server) Start() {
 			}
 		case Leader:
 			select {
-			case <-s.Shutdown:
+			case <-s.stop:
 				return
 			case req := <-s.AcceptRedirect():
 				req.Response <- s.RedirectRPC(req)
@@ -145,7 +145,7 @@ func (s *Server) Start() {
 			}
 		case Candidate:
 			select {
-			case <-s.Shutdown:
+			case <-s.stop:
 				return
 			case req := <-s.AcceptAppend():
 				req.Response <- s.AppendEntryRPC(req)
