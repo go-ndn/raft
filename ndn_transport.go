@@ -115,7 +115,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 		}
 
 		// fetch leader log entries
-		var log []LogEntry
+		log := make([]LogEntry, req.LogCount)
 		for i := req.PrevLogIndex + 1; i <= req.PrevLogIndex+req.LogCount; i++ {
 			var entry ndnLogEntry
 			err := tlv.Unmarshal(
@@ -127,10 +127,10 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			if err != nil {
 				return
 			}
-			log = append(log, LogEntry{
+			log[i-req.PrevLogIndex-1] = LogEntry{
 				Term:  entry.Term,
 				Value: entry.Value,
-			})
+			}
 		}
 
 		ch := make(chan *AppendResponse)
@@ -256,6 +256,12 @@ func (t *ndnTransport) AcceptRedirect() <-chan *RedirectRequest {
 func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendResponse {
 	// publish leader log entry
 	for i, entry := range req.Log {
+		entryName := ndn.NewName(fmt.Sprintf("/%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1))
+		if t.Publisher.Get(&ndn.Interest{Name: entryName}) != nil {
+			// already published
+			continue
+		}
+
 		b, err := tlv.Marshal(&ndnLogEntry{
 			Term:  entry.Term,
 			Value: entry.Value,
@@ -264,7 +270,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 			return &AppendResponse{}
 		}
 		t.Publish(&ndn.Data{
-			Name:    ndn.NewName(fmt.Sprintf("/%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1)),
+			Name:    entryName,
 			Content: b,
 		})
 	}
