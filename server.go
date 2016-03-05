@@ -1,3 +1,4 @@
+// Package raft implements the Raft distributed consensus protocol.
 package raft
 
 import (
@@ -6,24 +7,42 @@ import (
 	"time"
 )
 
+// ServerState is one of Follower, Leader, and Candidate.
 type ServerState uint8
 
+func (s ServerState) String() string {
+	switch s {
+	case Leader:
+		return "leader"
+	case Candidate:
+		return "candidate"
+	default:
+		return "follower"
+	}
+}
+
 const (
+	// Follower accepts AppendRequest from Leader
 	Follower ServerState = iota
+	// Leader periodically sends AppendRequest
 	Leader
+	// Candidate sends VoteRequest to become next Leader
 	Candidate
 )
 
+// Peer is a member of the Raft cluster.
 type Peer struct {
 	Name  string
 	Index uint64
 }
 
+// LogEntry is replicated to all members of the Raft cluster, and forms the heart of the replicated state machine.
 type LogEntry struct {
 	Term  uint64
 	Value []byte
 }
 
+// Server implements a Raft node.
 type Server struct {
 	State ServerState
 
@@ -43,6 +62,7 @@ type Server struct {
 	stop chan struct{}
 }
 
+// Option provides any necessary configuration to the Raft server.
 type Option struct {
 	Name string
 	Peer []string
@@ -50,6 +70,7 @@ type Option struct {
 	Transport
 }
 
+// NewServer creates a new Raft server.
 func NewServer(opt *Option) (*Server, error) {
 	log, err := opt.Store.GetLog()
 	if err != nil {
@@ -84,9 +105,16 @@ func NewServer(opt *Option) (*Server, error) {
 }
 
 const (
+	// HeartbeatTimeout is the time that a follower loses its leader, and should become a candidate.
+	// The actual timeout is randomized between 1x to 2x of this value.
+	// Some RPCs might delay it.
 	HeartbeatTimeout = 40 * HeartbeatIntv
-	ElectionTimeout  = 30 * HeartbeatIntv
-
+	// ElectionTimeout is the time that a candidate should request votes from its peers.
+	// The actual timeout is randomized between 1x to 2x of this value.
+	// Some RPCs might delay it.
+	ElectionTimeout = 30 * HeartbeatIntv
+	// HeartbeatIntv is the time that a leader should append new log entries to its peers.
+	// Some RPCs might delay it.
 	HeartbeatIntv = 100 * time.Millisecond
 )
 
@@ -94,10 +122,12 @@ func timeAfter(d time.Duration) <-chan time.Time {
 	return time.After(time.Duration((1 + rand.Float64()) * float64(d)))
 }
 
+// Stop halts the server.
 func (s *Server) Stop() {
 	s.stop <- struct{}{}
 }
 
+// Start restarts the server.
 func (s *Server) Start() {
 	for {
 		switch s.State {
@@ -106,11 +136,11 @@ func (s *Server) Start() {
 			case <-s.stop:
 				return
 			case req := <-s.AcceptRedirect():
-				req.Response <- s.RedirectRPC(req)
+				req.Response <- s.redirectRPC(req)
 			case req := <-s.AcceptAppend():
-				req.Response <- s.AppendEntryRPC(req)
+				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
-				req.Response <- s.VoteRPC(req)
+				req.Response <- s.voteRPC(req)
 			case <-timeAfter(HeartbeatTimeout):
 				if s.VotedFor == "" {
 					s.State = Candidate
@@ -121,10 +151,10 @@ func (s *Server) Start() {
 			case <-s.stop:
 				return
 			case req := <-s.AcceptRedirect():
-				req.Response <- s.RedirectRPC(req)
+				req.Response <- s.redirectRPC(req)
 			case <-time.After(HeartbeatIntv):
 				count := 1
-				for i, resp := range s.RequestAppendFromPeers() {
+				for i, resp := range s.requestAppendFromPeers() {
 					if resp.Success {
 						count++
 						s.Peer[i].Index = uint64(len(s.Log))
@@ -133,7 +163,7 @@ func (s *Server) Start() {
 							s.Peer[i].Index--
 						}
 					}
-					s.UpdateTermIfNewer(resp.Term)
+					s.updateTermIfNewer(resp.Term)
 				}
 				if count >= (len(s.Peer)+1)/2+1 {
 					err := s.CommitLog(s.Log[s.CommitIndex:])
@@ -148,18 +178,18 @@ func (s *Server) Start() {
 			case <-s.stop:
 				return
 			case req := <-s.AcceptAppend():
-				req.Response <- s.AppendEntryRPC(req)
+				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
-				req.Response <- s.VoteRPC(req)
+				req.Response <- s.voteRPC(req)
 			case <-timeAfter(ElectionTimeout):
-				s.UpdateTermIfNewer(s.Term + 1)
+				s.updateTermIfNewer(s.Term + 1)
 
 				count := 1
-				for _, resp := range s.RequestVoteFromPeers() {
+				for _, resp := range s.requestVoteFromPeers() {
 					if resp.Success {
 						count++
 					}
-					s.UpdateTermIfNewer(resp.Term)
+					s.updateTermIfNewer(resp.Term)
 				}
 				if count >= (len(s.Peer)+1)/2+1 {
 					s.State = Leader
@@ -175,7 +205,7 @@ func (s *Server) Start() {
 	}
 }
 
-func (s *Server) UpdateTermIfNewer(term uint64) bool {
+func (s *Server) updateTermIfNewer(term uint64) bool {
 	if s.Term >= term {
 		return false
 	}
@@ -186,7 +216,7 @@ func (s *Server) UpdateTermIfNewer(term uint64) bool {
 	return true
 }
 
-func (s *Server) RequestAppendFromPeers() []*AppendResponse {
+func (s *Server) requestAppendFromPeers() []*AppendResponse {
 	result := make([]*AppendResponse, len(s.Peer))
 	var wg sync.WaitGroup
 	wg.Add(len(s.Peer))
@@ -210,7 +240,7 @@ func (s *Server) RequestAppendFromPeers() []*AppendResponse {
 	return result
 }
 
-func (s *Server) RequestVoteFromPeers() []*VoteResponse {
+func (s *Server) requestVoteFromPeers() []*VoteResponse {
 	result := make([]*VoteResponse, len(s.Peer))
 	var wg sync.WaitGroup
 	wg.Add(len(s.Peer))

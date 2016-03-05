@@ -1,5 +1,6 @@
 package raft
 
+// AppendRequest is the command used to append entries to replicated log.
 type AppendRequest struct {
 	Name string
 
@@ -13,19 +14,20 @@ type AppendRequest struct {
 	Response chan<- *AppendResponse
 }
 
+// AppendResponse is the response of AppendRequest.
 type AppendResponse struct {
 	Term    uint64
 	Success bool
 }
 
-func (s *Server) AppendEntryRPC(req *AppendRequest) (resp *AppendResponse) {
+func (s *Server) appendEntryRPC(req *AppendRequest) (resp *AppendResponse) {
 	resp = &AppendResponse{
 		Term: s.Term,
 	}
 	if req.Term < s.Term {
 		return
 	}
-	if s.UpdateTermIfNewer(req.Term) {
+	if s.updateTermIfNewer(req.Term) {
 		resp.Term = s.Term
 	}
 

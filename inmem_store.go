@@ -10,6 +10,7 @@ type inmemStore struct {
 	Log      []LogEntry
 }
 
+// NewInmemStore creates a in-memory store for testing.
 func NewInmemStore() Store {
 	return &inmemStore{}
 }

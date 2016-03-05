@@ -83,6 +83,7 @@ type inmemTransport struct {
 	redirect chan *RedirectRequest
 }
 
+// NewInmemTransport creates a fake transport for testing.
 func NewInmemTransport(name string) Transport {
 	i := &inmemTransport{
 		append:   make(chan *AppendRequest),

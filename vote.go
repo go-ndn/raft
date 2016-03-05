@@ -1,5 +1,6 @@
 package raft
 
+// VoteRequest is the command used to elect a new leader.
 type VoteRequest struct {
 	Name string
 
@@ -10,19 +11,20 @@ type VoteRequest struct {
 	Response chan<- *VoteResponse
 }
 
+// VoteResponse is the response of VoteRequest.
 type VoteResponse struct {
 	Term    uint64
 	Success bool
 }
 
-func (s *Server) VoteRPC(req *VoteRequest) (resp *VoteResponse) {
+func (s *Server) voteRPC(req *VoteRequest) (resp *VoteResponse) {
 	resp = &VoteResponse{
 		Term: s.Term,
 	}
 	if req.Term < s.Term {
 		return
 	}
-	if s.UpdateTermIfNewer(req.Term) {
+	if s.updateTermIfNewer(req.Term) {
 		resp.Term = s.Term
 	}
 

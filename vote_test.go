@@ -83,7 +83,7 @@ func testVote(t *testing.T, transport func(*Option) Transport, store func(*Optio
 	server2.Stop()
 
 	if !(server1.State == Candidate || server2.State == Candidate) {
-		t.Fatalf("one follower should become candidate %d %d", server1.State, server2.State)
+		t.Fatalf("expect one candidate, got server1: %v, server2: %v", server1.State, server2.State)
 	}
 
 	go server1.Start()
@@ -95,7 +95,7 @@ func testVote(t *testing.T, transport func(*Option) Transport, store func(*Optio
 	server2.Stop()
 
 	if !(server1.State == Leader && server2.State == Follower) {
-		t.Fatalf("server1 should become leader %d %d", server1.State, server2.State)
+		t.Fatalf("expect server1 to be leader, got server1: %v, server2: %v", server1.State, server2.State)
 	}
 
 	if server1.Term == 0 {

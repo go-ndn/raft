@@ -68,6 +68,7 @@ func now() uint64 {
 	return uint64(time.Now().UTC().UnixNano() / 1000000)
 }
 
+// NewNDNTransport creates a new transport that uses NDN packets.
 func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 	name = "/" + name
 
