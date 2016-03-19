@@ -108,11 +108,11 @@ const (
 	// HeartbeatTimeout is the time that a follower loses its leader, and should become a candidate.
 	// The actual timeout is randomized between 1x to 2x of this value.
 	// Some RPCs might delay it.
-	HeartbeatTimeout = 40 * HeartbeatIntv
+	HeartbeatTimeout = 11 * HeartbeatIntv
 	// ElectionTimeout is the time that a candidate should request votes from its peers.
 	// The actual timeout is randomized between 1x to 2x of this value.
 	// Some RPCs might delay it.
-	ElectionTimeout = 30 * HeartbeatIntv
+	ElectionTimeout = 23 * HeartbeatIntv
 	// HeartbeatIntv is the time that a leader should append new log entries to its peers.
 	// Some RPCs might delay it.
 	HeartbeatIntv = 100 * time.Millisecond
