@@ -65,7 +65,7 @@ type ndnTransport struct {
 }
 
 func now() uint64 {
-	return uint64(time.Now().UTC().UnixNano() / 1000000)
+	return uint64(time.Now().UnixNano() / 1000000)
 }
 
 // NewNDNTransport creates a new transport that uses NDN packets.
