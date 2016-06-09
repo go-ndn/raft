@@ -2,7 +2,7 @@ package raft
 
 // VoteRequest is the command used to elect a new leader.
 type VoteRequest struct {
-	Name string
+	Candidate string
 
 	Term         uint64
 	LastLogTerm  uint64
@@ -28,7 +28,7 @@ func (s *Server) voteRPC(req *VoteRequest) (resp *VoteResponse) {
 		resp.Term = s.Term
 	}
 
-	if s.VotedFor != "" && s.VotedFor != req.Name {
+	if s.VotedFor != "" && s.VotedFor != req.Candidate {
 		return
 	}
 
@@ -40,7 +40,7 @@ func (s *Server) voteRPC(req *VoteRequest) (resp *VoteResponse) {
 		}
 	}
 
-	s.VotedFor = req.Name
+	s.VotedFor = req.Candidate
 	s.SetTerm(s.Term, s.VotedFor)
 	resp.Success = true
 

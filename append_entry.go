@@ -2,7 +2,7 @@ package raft
 
 // AppendRequest is the command used to append entries to replicated log.
 type AppendRequest struct {
-	Name string
+	Leader string
 
 	Term         uint64
 	PrevLogTerm  uint64
@@ -60,7 +60,7 @@ func (s *Server) appendEntryRPC(req *AppendRequest) (resp *AppendResponse) {
 	if s.State == Candidate || s.State == Leader {
 		s.State = Follower
 	}
-	s.Leader = req.Name
+	s.Leader = req.Leader
 
 	return
 }

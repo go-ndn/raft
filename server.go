@@ -224,7 +224,7 @@ func (s *Server) requestAppendFromPeers() []*AppendResponse {
 		go func(i int, p Peer) {
 			defer wg.Done()
 			req := &AppendRequest{
-				Name:        s.Name,
+				Leader:      s.Name,
 				Term:        s.Term,
 				CommitIndex: s.CommitIndex,
 				Log:         s.Log[p.Index:],
@@ -248,8 +248,8 @@ func (s *Server) requestVoteFromPeers() []*VoteResponse {
 		go func(i int, p Peer) {
 			defer wg.Done()
 			req := &VoteRequest{
-				Name: s.Name,
-				Term: s.Term,
+				Candidate: s.Name,
+				Term:      s.Term,
 			}
 			if len(s.Log) > 0 {
 				req.LastLogIndex = uint64(len(s.Log))

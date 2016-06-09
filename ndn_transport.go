@@ -16,7 +16,7 @@ type ndnLogEntry struct {
 }
 
 type ndnAppendRequest struct {
-	Name string `tlv:"131"`
+	Leader string `tlv:"131"`
 
 	Term         uint64 `tlv:"128"`
 	PrevLogTerm  uint64 `tlv:"132"`
@@ -32,7 +32,7 @@ type ndnAppendResponse struct {
 }
 
 type ndnVoteRequest struct {
-	Name string `tlv:"131"`
+	Candidate string `tlv:"131"`
 
 	Term         uint64 `tlv:"128"`
 	LastLogTerm  uint64 `tlv:"137"`
@@ -121,7 +121,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 			var entry ndnLogEntry
 			err := tlv.Unmarshal(
 				t.Fetch(w, &ndn.Interest{
-					Name: ndn.NewName(fmt.Sprintf("/%s/log/%d", req.Name, i)),
+					Name: ndn.NewName(fmt.Sprintf("/%s/log/%d", req.Leader, i)),
 				}),
 				&entry, 101,
 			)
@@ -136,7 +136,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 		ch := make(chan *AppendResponse)
 		t.append <- &AppendRequest{
-			Name: req.Name,
+			Leader: req.Leader,
 
 			Term:         req.Term,
 			PrevLogTerm:  req.PrevLogTerm,
@@ -175,7 +175,7 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 
 		ch := make(chan *VoteResponse)
 		t.vote <- &VoteRequest{
-			Name: req.Name,
+			Candidate: req.Candidate,
 
 			Term:         req.Term,
 			LastLogTerm:  req.LastLogTerm,
@@ -277,7 +277,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 	}
 
 	b, err := tlv.Marshal(&ndnAppendRequest{
-		Name:         req.Name,
+		Leader:       req.Leader,
 		Term:         req.Term,
 		PrevLogTerm:  req.PrevLogTerm,
 		PrevLogIndex: req.PrevLogIndex,
@@ -309,7 +309,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 
 func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse {
 	b, err := tlv.Marshal(&ndnVoteRequest{
-		Name:         req.Name,
+		Candidate:    req.Candidate,
 		Term:         req.Term,
 		LastLogTerm:  req.LastLogTerm,
 		LastLogIndex: req.LastLogIndex,
