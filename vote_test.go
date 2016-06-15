@@ -82,14 +82,14 @@ func testVote(t *testing.T, transport func(*Option) Transport, store func(*Optio
 	server1.Stop()
 	server2.Stop()
 
-	if !(server1.State == Candidate || server2.State == Candidate) {
-		t.Fatalf("expect one candidate, got server1: %v, server2: %v", server1.State, server2.State)
+	if !(server1.State == Candidate && server2.State == Candidate) {
+		t.Fatalf("expect candidate, got server1: %v, server2: %v", server1.State, server2.State)
 	}
 
 	go server1.Start()
 	go server2.Start()
 
-	time.Sleep(4 * ElectionTimeout)
+	time.Sleep(2 * ElectionTimeout)
 
 	server1.Stop()
 	server2.Stop()

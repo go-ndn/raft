@@ -118,8 +118,8 @@ const (
 	HeartbeatIntv = 100 * time.Millisecond
 )
 
-func timeAfter(d time.Duration) <-chan time.Time {
-	return time.After(time.Duration((1 + rand.Float64()) * float64(d)))
+func approx(d time.Duration) time.Duration {
+	return time.Duration((1 + rand.Float64()) * float64(d))
 }
 
 // Stop halts the server.
@@ -129,6 +129,15 @@ func (s *Server) Stop() {
 
 // Start restarts the server.
 func (s *Server) Start() {
+	heartbeatTimer := time.NewTimer(approx(HeartbeatTimeout))
+	defer heartbeatTimer.Stop()
+
+	electionTimer := time.NewTimer(approx(ElectionTimeout))
+	defer electionTimer.Stop()
+
+	heartbeatTicker := time.NewTicker(HeartbeatIntv)
+	defer heartbeatTicker.Stop()
+
 	for {
 		switch s.State {
 		case Follower:
@@ -141,7 +150,9 @@ func (s *Server) Start() {
 				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
 				req.Response <- s.voteRPC(req)
-			case <-timeAfter(HeartbeatTimeout):
+			case <-heartbeatTimer.C:
+				heartbeatTimer.Reset(approx(HeartbeatTimeout))
+
 				if s.VotedFor == "" {
 					s.State = Candidate
 				}
@@ -152,7 +163,7 @@ func (s *Server) Start() {
 				return
 			case req := <-s.AcceptRedirect():
 				req.Response <- s.redirectRPC(req)
-			case <-time.After(HeartbeatIntv):
+			case <-heartbeatTicker.C:
 				count := 1
 				for i, resp := range s.requestAppendFromPeers() {
 					if resp.Success {
@@ -181,7 +192,9 @@ func (s *Server) Start() {
 				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
 				req.Response <- s.voteRPC(req)
-			case <-timeAfter(ElectionTimeout):
+			case <-electionTimer.C:
+				electionTimer.Reset(approx(ElectionTimeout))
+
 				s.updateTermIfNewer(s.Term + 1)
 
 				count := 1
