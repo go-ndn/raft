@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/go-ndn/mux"
@@ -68,9 +69,16 @@ func now() uint64 {
 	return uint64(time.Now().UnixNano() / 1000000)
 }
 
+func normalize(s string) string {
+	if strings.HasPrefix(s, "/") {
+		return s
+	}
+	return "/" + s
+}
+
 // NewNDNTransport creates a new transport that uses NDN packets.
 func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
-	name = "/" + name
+	name = normalize(name)
 
 	cache := ndn.NewCache(65536)
 
@@ -116,12 +124,13 @@ func NewNDNTransport(name string, conn net.Conn, key ndn.Key) Transport {
 		}
 
 		// fetch leader log entries
+		leader := normalize(req.Leader)
 		log := make([]LogEntry, req.LogCount)
 		for i := req.PrevLogIndex + 1; i <= req.PrevLogIndex+req.LogCount; i++ {
 			var entry ndnLogEntry
 			err := tlv.Unmarshal(
 				t.Fetch(w, &ndn.Interest{
-					Name: ndn.NewName(fmt.Sprintf("/%s/log/%d", req.Leader, i)),
+					Name: ndn.NewName(fmt.Sprintf("%s/log/%d", leader, i)),
 				}),
 				&entry, 101,
 			)
@@ -255,9 +264,11 @@ func (t *ndnTransport) AcceptRedirect() <-chan *RedirectRequest {
 }
 
 func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendResponse {
+	peer = normalize(peer)
+
 	// publish leader log entry
 	for i, entry := range req.Log {
-		entryName := ndn.NewName(fmt.Sprintf("/%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1))
+		entryName := ndn.NewName(fmt.Sprintf("%s/log/%d", t.Name, req.PrevLogIndex+uint64(i)+1))
 		if t.Publisher.Get(&ndn.Interest{Name: entryName}) != nil {
 			// already published
 			continue
@@ -296,7 +307,7 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 
 	var resp ndnAppendResponse
 	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
-		Name: mux.Notify(fmt.Sprintf("/%s/listen/append", peer), reqName),
+		Name: mux.Notify(peer+"/listen/append", reqName),
 	}), &resp, 101)
 	if err != nil {
 		return &AppendResponse{}
@@ -308,6 +319,8 @@ func (t *ndnTransport) RequestAppend(peer string, req *AppendRequest) *AppendRes
 }
 
 func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse {
+	peer = normalize(peer)
+
 	b, err := tlv.Marshal(&ndnVoteRequest{
 		Candidate:    req.Candidate,
 		Term:         req.Term,
@@ -326,7 +339,7 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 
 	var resp ndnVoteResponse
 	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
-		Name: mux.Notify(fmt.Sprintf("/%s/listen/vote", peer), reqName),
+		Name: mux.Notify(peer+"/listen/vote", reqName),
 	}), &resp, 101)
 	if err != nil {
 		return &VoteResponse{}
@@ -338,6 +351,8 @@ func (t *ndnTransport) RequestVote(peer string, req *VoteRequest) *VoteResponse 
 }
 
 func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *RedirectResponse {
+	peer = normalize(peer)
+
 	b, err := tlv.Marshal(&ndnRedirectRequest{
 		Input: req.Input,
 	}, 101)
@@ -354,7 +369,7 @@ func (t *ndnTransport) RequestRedirect(peer string, req *RedirectRequest) *Redir
 
 	var resp ndnRedirectResponse
 	err = tlv.Unmarshal(t.Fetch(t, &ndn.Interest{
-		Name: mux.Notify(fmt.Sprintf("/%s/listen/redirect", peer), reqName),
+		Name: mux.Notify(peer+"/listen/redirect", reqName),
 	}), &resp, 101)
 	if err != nil {
 		return &RedirectResponse{}
