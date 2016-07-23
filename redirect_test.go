@@ -87,7 +87,7 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 	})
 
 	if resp.Success {
-		t.Fatalf("follower should not accept redirect")
+		t.Fatalf("expect follower to not accept redirect")
 	}
 
 	resp = follower.RequestRedirect(leaderOpt.Name, &RedirectRequest{
@@ -95,7 +95,11 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 	})
 
 	if !resp.Success {
-		t.Fatalf("leader should accept redirect")
+		t.Fatalf("expect leader to accept redirect")
+	}
+
+	if resp.Index != 1 {
+		t.Fatalf("expect 1, got %d", resp.Index)
 	}
 
 	time.Sleep(3 * HeartbeatIntv)
@@ -114,6 +118,32 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 	}
 	if !reflect.DeepEqual(expect, followerCommitted) {
 		t.Fatalf("expect %v, got %v", expect, followerCommitted)
+	}
+
+	resp = follower.RequestRedirect(leaderOpt.Name, &RedirectRequest{
+		Input: [][]byte{expect[0].Value},
+		Index: 1,
+	})
+
+	if !resp.Success {
+		t.Fatalf("expect leader to commit")
+	}
+
+	resp = follower.RequestRedirect(leaderOpt.Name, &RedirectRequest{
+		Input: [][]byte{{1, 2, 3}},
+		Index: 1,
+	})
+
+	if resp.Success {
+		t.Fatalf("expect leader to check redirect content")
+	}
+
+	resp = follower.RequestRedirect(leaderOpt.Name, &RedirectRequest{
+		Index: 2,
+	})
+
+	if resp.Success {
+		t.Fatalf("expect leader to check redirect index")
 	}
 
 	leader.Stop()
