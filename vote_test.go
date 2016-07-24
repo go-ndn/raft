@@ -77,6 +77,7 @@ func testVote(t *testing.T, transport func(*Option) Transport, store func(*Optio
 	go server1.Start()
 	go server2.Start()
 
+	// The actual timeout is randomized between 1x to 2x of HeartbeatTimeout.
 	time.Sleep(2 * HeartbeatTimeout)
 
 	server1.Stop()
@@ -89,7 +90,9 @@ func testVote(t *testing.T, transport func(*Option) Transport, store func(*Optio
 	go server1.Start()
 	go server2.Start()
 
-	time.Sleep(2 * ElectionTimeout)
+	// The actual timeout is randomized between 1x to 2x of ElectionTimeout.
+	// In addition, other candidate's vote request will reset the timer.
+	time.Sleep(2 * 2 * ElectionTimeout)
 
 	server1.Stop()
 	server2.Stop()

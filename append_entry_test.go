@@ -182,6 +182,8 @@ func testAppendEntry(t *testing.T, transport func(*Option) Transport, store func
 		go leader.Start()
 		go follower.Start()
 
+		// It takes len(leaderLog[3:]) * HeartbeatIntv to rollback, then
+		// it takes 2 * HeartbeatIntv and some extra time to fully commit log entries.
 		time.Sleep(time.Duration(len(leaderLog[3:])+3) * HeartbeatIntv)
 
 		leaderCommitted, err := leader.GetLog()

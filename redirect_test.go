@@ -102,6 +102,7 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 		t.Fatalf("expect 1, got %d", resp.Index)
 	}
 
+	// It takes 2 * HeartbeatIntv and some extra time to fully commit log entries.
 	time.Sleep(3 * HeartbeatIntv)
 
 	leaderCommitted, err := leader.GetLog()

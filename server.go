@@ -108,11 +108,11 @@ const (
 	// HeartbeatTimeout is the time that a follower loses its leader, and should become a candidate.
 	// The actual timeout is randomized between 1x to 2x of this value.
 	// Some RPCs might delay it.
-	HeartbeatTimeout = 11 * HeartbeatIntv
+	HeartbeatTimeout = 300 * time.Millisecond
 	// ElectionTimeout is the time that a candidate should request votes from its peers.
 	// The actual timeout is randomized between 1x to 2x of this value.
 	// Some RPCs might delay it.
-	ElectionTimeout = 23 * HeartbeatIntv
+	ElectionTimeout = 400 * time.Millisecond
 	// HeartbeatIntv is the time that a leader should append new log entries to its peers.
 	// Some RPCs might delay it.
 	HeartbeatIntv = 100 * time.Millisecond
@@ -129,12 +129,6 @@ func (s *Server) Stop() {
 
 // Start restarts the server.
 func (s *Server) Start() {
-	heartbeatTimer := time.NewTimer(approx(HeartbeatTimeout))
-	defer heartbeatTimer.Stop()
-
-	electionTimer := time.NewTimer(approx(ElectionTimeout))
-	defer electionTimer.Stop()
-
 	heartbeatTicker := time.NewTicker(HeartbeatIntv)
 	defer heartbeatTicker.Stop()
 
@@ -150,9 +144,7 @@ func (s *Server) Start() {
 				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
 				req.Response <- s.voteRPC(req)
-			case <-heartbeatTimer.C:
-				heartbeatTimer.Reset(approx(HeartbeatTimeout))
-
+			case <-time.After(approx(HeartbeatTimeout)):
 				if s.VotedFor == "" {
 					s.State = Candidate
 				}
@@ -192,9 +184,7 @@ func (s *Server) Start() {
 				req.Response <- s.appendEntryRPC(req)
 			case req := <-s.AcceptVote():
 				req.Response <- s.voteRPC(req)
-			case <-electionTimer.C:
-				electionTimer.Reset(approx(ElectionTimeout))
-
+			case <-time.After(approx(ElectionTimeout)):
 				s.updateTermIfNewer(s.Term + 1)
 
 				count := 1
