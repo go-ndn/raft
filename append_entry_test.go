@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-ndn/log"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/packet"
 )
@@ -29,12 +28,12 @@ func TestAppendEntryNDN(t *testing.T) {
 			// connect to nfd
 			conn, err := packet.Dial("tcp", ":6363")
 			if err != nil {
-				log.Fatalln(err)
+				t.Fatal(err)
 			}
 			// read producer key
 			pem, err := os.Open("key/default.pri")
 			if err != nil {
-				log.Fatalln(err)
+				t.Fatal(err)
 			}
 			defer pem.Close()
 			key, _ := ndn.DecodePrivateKey(pem)
