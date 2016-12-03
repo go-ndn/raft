@@ -97,8 +97,8 @@ func testRedirect(t *testing.T, transport func(*Option) Transport, store func(*O
 		t.Fatalf("expect leader to accept redirect")
 	}
 
-	if resp.Index != 1 {
-		t.Fatalf("expect 1, got %d", resp.Index)
+	if want := uint64(1); resp.Index != want {
+		t.Fatalf("expect %d, got %d", want, resp.Index)
 	}
 
 	// It takes 2 * HeartbeatIntv and some extra time to fully commit log entries.
