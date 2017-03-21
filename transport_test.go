@@ -39,6 +39,7 @@ func newRaftNode(ctx context.Context, id uint64, peers []raft.Peer) (raft.Node, 
 		Key:       key,
 		CacheSize: 64,
 	})
+	time.Sleep(time.Second)
 
 	// start one raft node
 	storage := raft.NewMemoryStorage()
@@ -119,6 +120,7 @@ func TestElection(t *testing.T) {
 	ctx := context.Background()
 
 	doneCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	const clusterSize = 3
 
@@ -135,17 +137,14 @@ func TestElection(t *testing.T) {
 		nodes = append(nodes, n)
 	}
 
-	time.Sleep(time.Second)
+	for i := 0; i < 10; i++ {
+		time.Sleep(time.Second)
 
-	var hasLeader bool
-	for _, n := range nodes {
-		if n.Status().SoftState.RaftState == raft.StateLeader {
-			hasLeader = true
+		for _, n := range nodes {
+			if n.Status().SoftState.RaftState == raft.StateLeader {
+				return
+			}
 		}
 	}
-
-	cancel()
-	if !hasLeader {
-		t.Fatalf("no raft leader")
-	}
+	t.Fatalf("no raft leader")
 }

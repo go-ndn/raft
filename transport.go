@@ -113,13 +113,7 @@ func New(config *Config) *Transport {
 		},
 	))
 
-	m.Register(t, config.Key)
-
-	go func() {
-		for i := range recv {
-			go m.ServeNDN(t, i)
-		}
-	}()
+	go m.Run(t, recv, config.Key)
 
 	return t
 }

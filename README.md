@@ -14,6 +14,8 @@ In 2017, the core raft implementation is replaced with [etcd/raft](https://githu
 
 [![GoDoc](https://godoc.org/github.com/go-ndn/raft?status.svg)](https://godoc.org/github.com/go-ndn/raft)
 
+See [transport_test.go](https://github.com/go-ndn/raft/blob/master/transport_test.go) for example.
+
 ```
 [[::1]:63817] 2017/02/21 18:46:47 face created
 [fib] 2017/02/21 18:46:47 add /raft/1/message
@@ -28,105 +30,4 @@ In 2017, the core raft implementation is replaced with [etcd/raft](https://githu
 [[::1]:63818] 2017/02/21 18:46:48 forward /raft/2/message/1487731608223/36d9ff45
 [[::1]:63818] 2017/02/21 18:46:48 receive /raft/2/message/1487731608223/36d9ff45/%00%00
 [[::1]:63817] 2017/02/21 18:46:48 receive /raft/1/listen/ACK/raft/2/message/1487731608223/36d9ff45
-```
-
-## Example
-
-```go
-// connect to nfd
-conn, err := packet.Dial("tcp", ":6363")
-if err != nil {
-  return nil, err
-}
-
-// read producer key
-pem, err := os.Open("key/default.pri")
-if err != nil {
-  return nil, err
-}
-defer pem.Close()
-key, err := ndn.DecodePrivateKey(pem)
-if err != nil {
-  return nil, err
-}
-
-// create NDN raft transport
-tr := New(&Config{
-  Prefix:    "/raft",
-  NodeID:    id,
-  Conn:      conn,
-  Key:       key,
-  CacheSize: 64,
-})
-
-// start one raft node
-storage := raft.NewMemoryStorage()
-logger := &raft.DefaultLogger{Logger: log.New(os.Stderr, "", log.LstdFlags)}
-n := raft.StartNode(
-  &raft.Config{
-    ID:              id,
-    ElectionTick:    10,
-    HeartbeatTick:   1,
-    Storage:         storage,
-    MaxSizePerMsg:   4096,
-    MaxInflightMsgs: 256,
-    Logger:          logger,
-  },
-  peers,
-)
-
-ticker := time.NewTicker(50 * time.Millisecond)
-defer ticker.Stop()
-
-defer tr.Close()
-defer n.Stop()
-for {
-  select {
-  case <-ticker.C:
-    // Call Node.Tick() at regular intervals.
-    n.Tick()
-  case msg := <-tr.RecvMessage:
-    // When you receive a message from another node, pass it to Node.Step.
-    n.Step(ctx, msg)
-  case rd := <-n.Ready():
-    // Write HardState, Entries, and Snapshot to persistent storage if they are not empty.
-    storage.Append(rd.Entries)
-    if !raft.IsEmptyHardState(rd.HardState) {
-      storage.SetHardState(rd.HardState)
-    }
-    if !raft.IsEmptySnap(rd.Snapshot) {
-      storage.ApplySnapshot(rd.Snapshot)
-    }
-
-    // Send all Messages to the nodes named in the To field.
-    // If any Message has type MsgSnap, call Node.ReportSnapshot() after it has been sent.
-    for _, msg := range rd.Messages {
-      err := tr.Send(msg)
-      switch msg.Type {
-      case raftpb.MsgSnap:
-        s := raft.SnapshotFinish
-        if err != nil {
-          s = raft.SnapshotFailure
-        }
-        n.ReportSnapshot(msg.To, s)
-      }
-    }
-
-    // Apply Snapshot (if any) and CommittedEntries to the state machine.
-    // If any committed Entry has Type EntryConfChange, call Node.ApplyConfChange() to apply it to the node.
-    for _, entry := range rd.CommittedEntries {
-      switch entry.Type {
-      case raftpb.EntryConfChange:
-        var cc raftpb.ConfChange
-        cc.Unmarshal(entry.Data)
-        n.ApplyConfChange(cc)
-      }
-    }
-
-    // Call Node.Advance() to signal readiness for the next batch of updates.
-    n.Advance()
-  case <-ctx.Done():
-    return
-  }
-}
 ```
