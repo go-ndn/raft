@@ -35,13 +35,19 @@ func (t *Transport) Send(msg raftpb.Message) error {
 
 	name := fmt.Sprintf("%s/%d/message/%d/%08x", t.Prefix, t.NodeID, time.Now().UnixNano()/1000000, rand.Uint32())
 
-	t.Publish(&ndn.Data{
+	err = t.Publish(&ndn.Data{
 		Name:    ndn.NewName(name),
 		Content: b,
 	})
-	t.Fetch(t, &ndn.Interest{
+	if err != nil {
+		return err
+	}
+	_, err = t.Fetch(t, &ndn.Interest{
 		Name: mux.Notify(fmt.Sprintf("%s/%d/listen", t.Prefix, msg.To), name),
 	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -92,24 +98,31 @@ func New(config *Config) *Transport {
 	// served from cache
 	m.HandleFunc(
 		fmt.Sprintf("%s/%d/message", config.Prefix, config.NodeID),
-		func(w ndn.Sender, i *ndn.Interest) {},
+		func(w ndn.Sender, i *ndn.Interest) error { return nil },
 	)
 	m.Handle(mux.Listener(
 		fmt.Sprintf("%s/%d/listen", config.Prefix, config.NodeID),
-		func(locator string, w ndn.Sender, i *ndn.Interest) {
+		func(locator string, w ndn.Sender, i *ndn.Interest) error {
 			var msg raftpb.Message
-			err := msg.Unmarshal(
-				t.Fetch(w, &ndn.Interest{
-					Name: ndn.NewName(locator),
-				}),
-			)
+
+			content, err := t.Fetch(w, &ndn.Interest{
+				Name: ndn.NewName(locator),
+			})
 			if err != nil {
-				return
+				return err
 			}
-			w.SendData(&ndn.Data{
+			err = msg.Unmarshal(content)
+			if err != nil {
+				return err
+			}
+			err = w.SendData(&ndn.Data{
 				Name: i.Name,
 			})
+			if err != nil {
+				return err
+			}
 			recvMessage <- msg
+			return nil
 		},
 	))
 
