@@ -93,7 +93,9 @@ func New(config *Config) *Transport {
 	t.Publisher.Use(mux.Segmentor(4096))
 
 	m := mux.New()
-	m.Use(mux.RawCacher(cache, false))
+	m.Use(mux.RawCacher(&mux.CacherOptions{
+		Cache: cache,
+	}))
 
 	// served from cache
 	m.HandleFunc(
